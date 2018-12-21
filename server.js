@@ -23,33 +23,48 @@ console.log(key)
 app.use(express.static('public'));
 
 // http://expressjs.com/en/starter/basic-routing.html
-app.get('/one', function(request, response) {
-  //console.log((request.rawHeaders));
-  const readStream = fs.createReadStream('./img.jpg');
-	readStream.on('data', (chunk) =>{
-
-	  	response.send(cipher(key,padRight(chunk.toString("base64"))));
-	});
+app.get('/red', function(request, response) {
+	response.send(readImage("./red.jpg"));
+});
+app.get('/car', function(request, response) {
+	response.send(readImage("./car.jpg"));
+});
+app.get('/cookie', function(request, response) {
+	response.send(readImage("./cookie.jpg"));
 });
 app.get('*', function(req, res){
   res.send('page not found <a href="one">try this</a>', 404);
 });
+function readImage(link) {
+	return cipher(key,padRight(fs.readFileSync(link,"base64")));
+}
 function padRight(message){
 	m = message
-	for(var i = 0; i < (16-(message.length%16));i++){
+	for(var i = 0; i < ((message.length%16));i++){
 		m += " "
 	}
 	return m
 }
+function padRightArray(array){
+	m = Array.from(array);
+	for(var i = 0; i < ((array.length%16));i++){
+		m.push(" ".charCodeAt(0));
+	}
+	return m
+}
 function cipher(key, message) {
-	var iv = crypto.randomFillSync(new Uint8Array(16)); 
-	console.log(iv)
+	var iv = crypto.randomFillSync(new Uint8Array(16));
 	var aesCbc = new aes.ModeOfOperation.cbc(key, Array.from(iv));
-    return aes.utils.hex.fromBytes(iv)+":"+aes.utils.hex.fromBytes(aesCbc.encrypt(aes.utils.utf8.toBytes(message)));
+	message = aes.utils.utf8.toBytes(message)
+	console.log(message.length%16)
+	
+	encrypted = aes.utils.hex.fromBytes(aesCbc.encrypt(padRightArray(message)));
+	return aes.utils.hex.fromBytes(iv)+":"+encrypted
 }
 function decipher(key, message) {
 	var iv = message.split(":")[0];
 	console.log(iv.length)
+
 	var message= message.split(":")[1];
 	var mykey = crypto.createDecipheriv('aes-128-cbc', key, iv);
 	var mystr = mykey.update(message, 'hex', 'utf8')
