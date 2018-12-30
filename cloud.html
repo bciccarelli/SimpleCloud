@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Cloud</title>
+	<meta charset="utf-8"/>
+</head>
+<body onload="onload()">
+<img id="image" width="720" height="480" src="data:image/jpeg;base64,">
+<p id="shown"></p>
+<label>Password</label>
+<input id="password" onchange="update()">
+<br>
+<label>Salt</label>
+<input id="salt" onchange="update()">
+<br>
+<label>Link</label>
+<input id="link" onchange="update()">
+<br>
+<label>Red Image</label>
+<input id="red" name="file" type="radio" value="red" onchange="update()">
+<br>
+<label>Car Image</label>
+<input id="car" name="file" type="radio" value="car" onchange="update()">
+<br>
+<label>Cookie Image</label>
+<input id="cookie" name="file" type="radio" value="cookie" onchange="update()">
+<button onclick="get()">open file</button>
+
+</body>
+
+<script src="aes.js" type="text/javascript"></script>
+<script type="text/javascript">
+
+var xhttp = new XMLHttpRequest();
+var link = "https://ecf6e909.ngrok.io/";
+var password="banana";
+var salt="salt";
+var file="red"
+xhttp.onreadystatechange = async function() {
+	if (this.readyState == 4 && this.status == 200) {
+        //document.getElementById('image').src+=this.responseText
+		var iv = this.responseText.split(":")[0];
+		var data = this.responseText.split(":")[1];
+        
+		decrypt(iv, data);
+	}
+};
+async function get() {
+    if(file){
+        console.log("successfully retrieved file")
+        console.log(new Uint8Array(await generateKey(100)));
+        xhttp.open("GET", link+file, true);
+        xhttp.send();
+    }
+}
+var key;
+async function decrypt(iv,data) {
+	key = await generateKey(100);
+    var aesCbc = new aesjs.ModeOfOperation.cbc(Array.from(new Uint8Array(key)), aesjs.utils.hex.toBytes(iv));
+    var decryptedBytes = aesCbc.decrypt(aesjs.utils.hex.toBytes(data));
+    console.log(key)
+    var decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
+    console.log(decryptedText[0])
+    document.getElementById('image').src="data:image/jpeg;base64,"+(decryptedText)
+}
+
+function onload(){
+    document.getElementById("link").value = link;
+    document.getElementById("password").value = password;
+    document.getElementById("salt").value = salt;
+    document.getElementById("red").checked ? file="red":document.getElementById("car").checked ? file="car":file="cookie"
+}
+function update(){
+    link = document.getElementById("link").value;
+    salt = document.getElementById("salt").value;
+    password = document.getElementById("password").value;
+    document.getElementById("red").checked ? file="red":document.getElementById("car").checked ? file="car":file="cookie"
+}
+async function generateKey(iterations) {
+    password = document.getElementById("password").value;
+    password = encode(password);
+
+    salt = document.getElementById("salt").value;
+    salt = encode(salt);
+    console.log(password);
+
+	var key = await window.crypto.subtle.importKey('raw',password,{name: 'PBKDF2'},false,['deriveBits', 'deriveKey'])
+	var webKey = await window.crypto.subtle.deriveKey({ "name": 'PBKDF2',"salt": salt, "iterations": iterations,"hash": 'SHA-256'},key,{ "name": 'AES-CBC', "length": 128 },true,[ "encrypt", "decrypt" ])
+	return crypto.subtle.exportKey("raw", webKey);
+}
+
+function encode(b) {
+	console.log(b)
+	var a = [];
+	for(var i = 0; i < b.length; i++) a.push(b.charCodeAt(i));
+	return new Uint8Array(a);
+}
+function stringToUint(string) {
+    var string = btoa(unescape(encodeURIComponent(string))),
+        charList = string.split(''),
+        uintArray = [];
+    for (var i = 0; i < charList.length; i++) {
+        uintArray.push(charList[i].charCodeAt(0));
+    }
+    return new Uint8Array(uintArray);
+}
+
+function ab2str(buf) {
+    var result = '';
+    if (buf) {
+        var bytes = new Uint8Array(buf);
+        for (var i = 0; i < bytes.byteLength; i++) {
+            result = result + (bytes[i].toString(16));
+        }
+    }
+    return result;
+}
+</script>
+</html>

@@ -36,7 +36,7 @@ func returnFile(w http.ResponseWriter, r *http.Request) {
 	check(err);
 	
 	ciphertext := make([]byte, len(data))
-	iv := make([]byte,aes.BlockSize)
+	iv := make([]byte, aes.BlockSize)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		panic(err)
 	}
