@@ -27,10 +27,10 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 }
 func returnFile(w http.ResponseWriter, r *http.Request) {
 	(w).Header().Set("Access-Control-Allow-Origin", "*")
-	file, err := ioutil.ReadFile("red.jpg")
+	file, err := ioutil.ReadFile(strings.TrimPrefix(r.URL.Path, "/")+".jpg")
 	check(err);
 
-	data := base64.StdEncoding.EncodeToString(file)
+	data := padRight([]byte(base64.StdEncoding.EncodeToString(file)))
 
 	block, err := aes.NewCipher(dk)
 	check(err);
@@ -55,6 +55,8 @@ func main() {
 	dk = pbkdf2.Key([]byte(password), []byte(salt), 100, 16, sha256.New)
 	http.HandleFunc("/", handle404)
   	http.HandleFunc("/red", returnFile)
+  	http.HandleFunc("/cookie", returnFile)
+  	http.HandleFunc("/car", returnFile)
 
   	if err := http.ListenAndServe(":3000", nil); err != nil {
     	panic(err)
