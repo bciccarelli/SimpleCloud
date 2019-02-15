@@ -38,7 +38,7 @@ func returnFile(w http.ResponseWriter, r *http.Request) {
 	out := ""
 	files := readFS()
 	for _, files := range files {
-        f, err := ioutil.ReadFile(strings.TrimPrefix("files/"+files, "/"))
+        f, err := ioutil.ReadFile("files/"+files)
 		check(err);
 		if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
 			out += base64.StdEncoding.EncodeToString(f)
@@ -46,11 +46,11 @@ func returnFile(w http.ResponseWriter, r *http.Request) {
 			out += string(f)
 
 		}
-		out += "!fileName" + strings.TrimPrefix(files, "/")+"!fileName"
+		out += "!fileName!"+files+"!fileName!"
     }
 	
 
-	data := padRight([]byte(out))
+	data := padRight(out)
 
 	block, err := aes.NewCipher(dk)
 	check(err);
@@ -95,8 +95,8 @@ func main() {
     	panic(err)
   	}
 }
-func padRight(str []byte) (string) {
-	m := string(str)
+func padRight(str string) (string) {
+	m := str
 	for i := 0; i < (16-(len(str)%16)); i++ {
 		m += " "
 	}
