@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"os"
 	"io/ioutil"
 	"encoding/hex"
 	"encoding/base64"
@@ -15,10 +16,11 @@ import (
   	"golang.org/x/crypto/pbkdf2"
 )
 const (
-	password = "banana"
-	salt = "salt"
+	password = "This is my password"
 )
 var dk []byte
+var salt string
+var err error
 func handle404(w http.ResponseWriter, r *http.Request) {
 	message := r.URL.Path
 	message = strings.TrimPrefix(message, "/")
@@ -26,11 +28,29 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(message))
 }
 func returnFile(w http.ResponseWriter, r *http.Request) {
-	(w).Header().Set("Access-Control-Allow-Origin", "*")
-	file, err := ioutil.ReadFile(strings.TrimPrefix(r.URL.Path, "/")+".jpg")
-	check(err);
 
-	data := padRight([]byte(base64.StdEncoding.EncodeToString(file)))
+	(w).Header().Set("Access-Control-Allow-Origin", "*")
+
+	salt,err = GenerateRandomString(8)
+	check(err)
+	dk = pbkdf2.Key([]byte(password), []byte(salt), 100, 16, sha256.New)
+	
+	out := ""
+	files := readFS()
+	for _, files := range files {
+        f, err := ioutil.ReadFile(strings.TrimPrefix("files/"+files, "/"))
+		check(err);
+		if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
+			out += base64.StdEncoding.EncodeToString(f)
+		} else {
+			out += string(f)
+
+		}
+		out += "!fileName" + strings.TrimPrefix(files, "/")+"!fileName"
+    }
+	
+
+	data := padRight([]byte(out))
 
 	block, err := aes.NewCipher(dk)
 	check(err);
@@ -43,20 +63,33 @@ func returnFile(w http.ResponseWriter, r *http.Request) {
 	mode := cipher.NewCBCEncrypter(block, iv)
 	mode.CryptBlocks(ciphertext, []byte(data))
 
-	final := hex.EncodeToString(iv)+":"+hex.EncodeToString(ciphertext)
-    fmt.Println(len(string(data)))
+	final := hex.EncodeToString(iv)+":"+hex.EncodeToString(ciphertext)+":"+salt
 
     w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Write([]byte(final))
+	fmt.Println("Sent.")
 }
 
-func main() {
+func GenerateRandomBytes(n int) ([]byte, error) {
+    b := make([]byte, n)
+    _, err := rand.Read(b)
+    // Note that err == nil only if we read len(b) bytes.
+    if err != nil {
+        return nil, err
+    }
 
-	dk = pbkdf2.Key([]byte(password), []byte(salt), 100, 16, sha256.New)
-	http.HandleFunc("/", handle404)
-  	http.HandleFunc("/red", returnFile)
-  	http.HandleFunc("/cookie", returnFile)
-  	http.HandleFunc("/car", returnFile)
+    return b, nil
+}
+
+func GenerateRandomString(s int) (string, error) {
+    b, err := GenerateRandomBytes(s)
+    return base64.URLEncoding.EncodeToString(b), err
+}
+
+
+func main() {
+	http.HandleFunc("/", returnFile)
+
 
   	if err := http.ListenAndServe(":3000", nil); err != nil {
     	panic(err)
@@ -73,4 +106,25 @@ func check(e error) {
     if e != nil {
         panic(e)
     }
+}
+func readFS() ([]string) {
+	m := make([]string,0)
+	dirname := "./files"
+    d, err := os.Open(dirname)
+    if err != nil {
+        fmt.Println(err)
+        os.Exit(1)
+    }
+    defer d.Close()
+    fi, err := d.Readdir(-1)
+    if err != nil {
+        fmt.Println(err)
+        os.Exit(1)
+    }
+    for _, fi := range fi {
+        if fi.Mode().IsRegular() {
+        	m = append(m,fi.Name())
+        }
+    }
+    return m
 }
