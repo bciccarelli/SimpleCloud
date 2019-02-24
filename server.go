@@ -11,9 +11,11 @@ import (
 	"io/ioutil"
 	"encoding/hex"
 	"encoding/base64"
+    //"encoding/json"
   	"net/http"
   	"strings"
   	"golang.org/x/crypto/pbkdf2"
+  	"time"
 )
 const (
 	password = "This is my password"
@@ -27,47 +29,88 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 	message = "404: /" + message +" not found"
 	w.Write([]byte(message))
 }
+
+type write struct {
+    test string
+}
+
 func returnFile(w http.ResponseWriter, r *http.Request) {
+	message := r.URL.Path
+	if strings.TrimPrefix(message, "/write")==message {
+		(w).Header().Set("Access-Control-Allow-Origin", "*")
 
-	(w).Header().Set("Access-Control-Allow-Origin", "*")
+		salt,err = GenerateRandomString(8)
+		check(err)
+		dk = pbkdf2.Key([]byte(password), []byte(salt), 100, 16, sha256.New)
+		
+		out := ""
+		files := readFS("running")
+		for _, files := range files {
+	        f, err := ioutil.ReadFile("running/"+files)
+			check(err);
+			if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
+				out += base64.StdEncoding.EncodeToString(f)
+			} else {
+				//out += string(f)
 
-	salt,err = GenerateRandomString(8)
-	check(err)
-	dk = pbkdf2.Key([]byte(password), []byte(salt), 100, 16, sha256.New)
-	
-	out := ""
-	files := readFS()
-	for _, files := range files {
-        f, err := ioutil.ReadFile("files/"+files)
+			}
+			out += "!.!"
+			out += files
+			out += "!.!"
+	    }
+	    out+="!s!"
+	    files = readFS("stopped")
+		for _, files := range files {
+	        f, err := ioutil.ReadFile("stopped/"+files)
+			check(err);
+			if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
+				out += base64.StdEncoding.EncodeToString(f)
+			} else {
+				//out += string(f)
+
+			}
+			out += "!.!"
+			out += files
+			out += "!.!"
+	    }
+	    out += "........."
+		data := padRight(out)
+
+		block, err := aes.NewCipher(dk)
 		check(err);
-		if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
-			out += base64.StdEncoding.EncodeToString(f)
-		} else {
-			out += string(f)
-
+		
+		ciphertext := make([]byte, len(data))
+		iv := make([]byte, aes.BlockSize)
+		if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+			panic(err)
 		}
-		out += "!fileName!"+files+"!fileName!"
-    }
-	
+		mode := cipher.NewCBCEncrypter(block, iv)
+		mode.CryptBlocks(ciphertext, []byte(data))
 
-	data := padRight(out)
+		final := hex.EncodeToString(iv)+":"+hex.EncodeToString(ciphertext)+":"+salt
 
-	block, err := aes.NewCipher(dk)
-	check(err);
-	
-	ciphertext := make([]byte, len(data))
-	iv := make([]byte, aes.BlockSize)
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		panic(err)
+	    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte(final))
+		fmt.Println("Sent.")
+	} else {
+		a := (r.Header["T"][0])
+		c,err := hex.DecodeString(strings.Split(a,":")[1])
+		check(err);
+		s,err:= hex.DecodeString(strings.Split(a,":")[2])
+		check(err);
+		dk = pbkdf2.Key([]byte(password), []byte(s), 100, 16, sha256.New)
+		block, err := aes.NewCipher(dk)
+		iv,err := hex.DecodeString(strings.Split(a,":")[0])
+		check(err);
+
+		mode := cipher.NewCBCDecrypter(block, iv)
+
+		mode.CryptBlocks(c, c)
+		fileName := c[:strings.Index(string(c), ":")]
+		write := c[strings.Index(string(c), ":")+1:]
+		err = ioutil.WriteFile(string(fileName), write, 0644)
+    	check(err)
 	}
-	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(ciphertext, []byte(data))
-
-	final := hex.EncodeToString(iv)+":"+hex.EncodeToString(ciphertext)+":"+salt
-
-    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write([]byte(final))
-	fmt.Println("Sent.")
 }
 
 func GenerateRandomBytes(n int) ([]byte, error) {
@@ -88,12 +131,20 @@ func GenerateRandomString(s int) (string, error) {
 
 
 func main() {
+	fmt.Println("Started")
+  	go manage()
 	http.HandleFunc("/", returnFile)
-
-
   	if err := http.ListenAndServe(":3000", nil); err != nil {
     	panic(err)
   	}
+}
+func manage() {
+	for (true) {
+		time.Sleep(time.Second)
+		if() {
+				
+		}
+	}
 }
 func padRight(str string) (string) {
 	m := str
@@ -107,9 +158,9 @@ func check(e error) {
         panic(e)
     }
 }
-func readFS() ([]string) {
+func readFS(path string) ([]string) {
 	m := make([]string,0)
-	dirname := "./files"
+	dirname := "./"+path
     d, err := os.Open(dirname)
     if err != nil {
         fmt.Println(err)
