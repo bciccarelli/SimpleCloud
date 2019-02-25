@@ -1,21 +1,23 @@
 package main
 
 import (
-  	"crypto/sha256"
+	"bufio"
+	"crypto/sha256"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"fmt"
+	"os/exec"
 	"io"
 	"os"
 	"io/ioutil"
 	"encoding/hex"
 	"encoding/base64"
-    //"encoding/json"
-  	"net/http"
-  	"strings"
-  	"golang.org/x/crypto/pbkdf2"
-  	"time"
+	//"encoding/json"
+	"net/http"
+	"strings"
+	"golang.org/x/crypto/pbkdf2"
+	"time" 
 )
 const (
 	password = "This is my password"
@@ -46,7 +48,7 @@ func returnFile(w http.ResponseWriter, r *http.Request) {
 		out := ""
 		files := readFS("running")
 		for _, files := range files {
-	        f, err := ioutil.ReadFile("running/"+files)
+			f, err := ioutil.ReadFile("running/"+files)
 			check(err);
 			if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
 				out += base64.StdEncoding.EncodeToString(f)
@@ -67,8 +69,8 @@ func returnFile(w http.ResponseWriter, r *http.Request) {
 				out += base64.StdEncoding.EncodeToString(f)
 			} else {
 				//out += string(f)
-
 			}
+
 			out += "!.!"
 			out += files
 			out += "!.!"
@@ -141,10 +143,39 @@ func main() {
 func manage() {
 	for (true) {
 		time.Sleep(time.Second)
-		if() {
-				
-		}
+		go execute("running/hello.py")
 	}
+}
+var running []string
+func execute(file string) {
+	cmd := exec.Command("py", file)
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        panic(err)
+    }
+    stderr, err := cmd.StderrPipe()
+    if err != nil {
+        panic(err)
+    }
+    err = cmd.Start()
+    if err != nil {
+        panic(err)
+    }
+
+    go copyOutput(file, stdout)
+    go copyOutput(file, stderr)
+    cmd.Wait()
+}
+
+func copyOutput(file string, r io.Reader) {
+    scanner := bufio.NewScanner(r)
+    for scanner.Scan() {
+        fmt.Println(scanner.Text())
+        a,err := ioutil.ReadFile(file+".txt")
+        check(err)
+		err = ioutil.WriteFile(string(file+".txt"), []byte(string(a)+"\r\n"+ time.Now().Format(time.UnixDate)+": "+scanner.Text()), 0644)
+    	check(err)
+    }
 }
 func padRight(str string) (string) {
 	m := str
