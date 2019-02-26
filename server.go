@@ -38,62 +38,96 @@ type write struct {
 
 func returnFile(w http.ResponseWriter, r *http.Request) {
 	message := r.URL.Path
+	(w).Header().Set("Access-Control-Allow-Origin", "*")
 	if strings.TrimPrefix(message, "/write")==message {
-		(w).Header().Set("Access-Control-Allow-Origin", "*")
+		if strings.TrimPrefix(message, "/read")==message {
+			salt,err = GenerateRandomString(8)
+			check(err)
+			dk = pbkdf2.Key([]byte(password), []byte(salt), 100, 16, sha256.New)
+			
+			out := ""
+			files := readFS("running")
+			for _, files := range files {
+				f, err := ioutil.ReadFile("running/"+files)
+				check(err);
+				if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
+					out += base64.StdEncoding.EncodeToString(f)
+				} else {
+					//out += string(f)
 
-		salt,err = GenerateRandomString(8)
-		check(err)
-		dk = pbkdf2.Key([]byte(password), []byte(salt), 100, 16, sha256.New)
-		
-		out := ""
-		files := readFS("running")
-		for _, files := range files {
-			f, err := ioutil.ReadFile("running/"+files)
+				}
+				out += "!.!"
+				out += files
+				out += "!.!"
+		    }
+		    out+="!s!"
+		    files = readFS("stopped")
+			for _, files := range files {
+		        f, err := ioutil.ReadFile("stopped/"+files)
+				check(err);
+				if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
+					out += base64.StdEncoding.EncodeToString(f)
+				} else {
+					//out += string(f)
+				}
+
+				out += "!.!"
+				out += files
+				out += "!.!"
+		    }
+		    out += "aaaaaaaaa"
+			data := padRight(out)
+
+			block, err := aes.NewCipher(dk)
 			check(err);
-			if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
-				out += base64.StdEncoding.EncodeToString(f)
-			} else {
-				//out += string(f)
-
+			
+			ciphertext := make([]byte, len(data))
+			iv := make([]byte, aes.BlockSize)
+			if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+				panic(err)
 			}
-			out += "!.!"
-			out += files
-			out += "!.!"
-	    }
-	    out+="!s!"
-	    files = readFS("stopped")
-		for _, files := range files {
-	        f, err := ioutil.ReadFile("stopped/"+files)
+			mode := cipher.NewCBCEncrypter(block, iv)
+			mode.CryptBlocks(ciphertext, []byte(data))
+
+			final := hex.EncodeToString(iv)+":"+hex.EncodeToString(ciphertext)+":"+salt
+
+		    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write([]byte(final))
+		} else {
+			a := (r.Header["T"][0])
+			c,err := hex.DecodeString(strings.Split(a,":")[1])
 			check(err);
-			if(strings.HasSuffix(files, ".jpg")||strings.HasSuffix(files, ".png")){
-				out += base64.StdEncoding.EncodeToString(f)
-			} else {
-				//out += string(f)
+			s,err:= hex.DecodeString(strings.Split(a,":")[2])
+			check(err);
+			dk = pbkdf2.Key([]byte(password), []byte(s), 100, 16, sha256.New)
+			block, err := aes.NewCipher(dk)
+			iv,err := hex.DecodeString(strings.Split(a,":")[0])
+			check(err);
+
+			mode := cipher.NewCBCDecrypter(block, iv)
+
+			mode.CryptBlocks(c, c)
+
+			fileName := c[:strings.Index(string(c), ":")]
+			b, err := ioutil.ReadFile("running/"+string(fileName)+".txt")
+			check(err)
+			salt, err = GenerateRandomString(8)
+			check(err)
+			dk = pbkdf2.Key([]byte(password), []byte(salt), 100, 16, sha256.New)
+			data := padRight(string(b))
+			block, err = aes.NewCipher(dk)
+			check(err);
+			ciphertext := make([]byte, len(data))
+			iv = make([]byte, aes.BlockSize)
+			if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+				panic(err)
 			}
-
-			out += "!.!"
-			out += files
-			out += "!.!"
-	    }
-	    out += "........."
-		data := padRight(out)
-
-		block, err := aes.NewCipher(dk)
-		check(err);
-		
-		ciphertext := make([]byte, len(data))
-		iv := make([]byte, aes.BlockSize)
-		if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-			panic(err)
+			mode = cipher.NewCBCEncrypter(block, iv)
+			mode.CryptBlocks(ciphertext, []byte(data))
+			final := hex.EncodeToString(iv)+":"+hex.EncodeToString(ciphertext)+":"+salt
+		    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write([]byte(final))
 		}
-		mode := cipher.NewCBCEncrypter(block, iv)
-		mode.CryptBlocks(ciphertext, []byte(data))
-
-		final := hex.EncodeToString(iv)+":"+hex.EncodeToString(ciphertext)+":"+salt
-
-	    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Write([]byte(final))
-		fmt.Println("Sent.")
 	} else {
 		a := (r.Header["T"][0])
 		c,err := hex.DecodeString(strings.Split(a,":")[1])
@@ -113,6 +147,8 @@ func returnFile(w http.ResponseWriter, r *http.Request) {
 		err = ioutil.WriteFile(string(fileName), write, 0644)
     	check(err)
 	}
+
+	fmt.Println("Request Handled.")
 }
 
 func GenerateRandomBytes(n int) ([]byte, error) {
@@ -170,7 +206,6 @@ func execute(file string) {
 func copyOutput(file string, r io.Reader) {
     scanner := bufio.NewScanner(r)
     for scanner.Scan() {
-        fmt.Println(scanner.Text())
         a,err := ioutil.ReadFile(file+".txt")
         check(err)
 		err = ioutil.WriteFile(string(file+".txt"), []byte(string(a)+"\r\n"+ time.Now().Format(time.UnixDate)+": "+scanner.Text()), 0644)
